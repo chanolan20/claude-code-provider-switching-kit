@@ -1,0 +1,7 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
+    "ANTHROPIC_API_KEY": "your-anthropic-api-key",
+    "API_TIMEOUT_MS": "300000"
+  }
+}
