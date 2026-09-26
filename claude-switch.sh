@@ -2,6 +2,7 @@
 
 # claude-switch — Switch Claude Code between providers in one command
 # Usage: claude-switch <profile>       Switch to a profile (merges env, backs up first)
+#        claude-switch run <profile> [args...]  Launch claude with a profile for one session only
 #        claude-switch add <name>      Create a new profile from template
 #        claude-switch list            List available profiles
 #        claude-switch current         Show which profile is active
@@ -237,6 +238,9 @@ show_doctor() {
 if [ -z "$1" ]; then
     echo "Usage:"
     echo "  claude-switch <profile>     Switch to a profile (merges env, backs up first)"
+    echo "  claude-switch run <profile> [args...]"
+    echo "                              Launch claude with a profile for one session only"
+    echo "                              (settings.json is never touched)"
     echo "  claude-switch add <name>    Create a new profile"
     echo "  claude-switch list          List available profiles"
     echo "  claude-switch current       Show active profile"
@@ -270,6 +274,48 @@ case $1 in
         else
             echo "No backups yet."
         fi
+        ;;
+    run)
+        shift
+        [ -n "${1:-}" ] || die "Usage: claude-switch run <profile> [claude args...]"
+        prof="$1"
+        shift
+        if ! [[ "$prof" =~ $PROFILE_NAME_RE ]]; then
+            die "Invalid profile name '$prof'. Use letters, digits, '-' or '_' only (no '/', '.', or spaces)."
+        fi
+        pf="$PROFILES/$prof.json"
+        [ -f "$pf" ] || die "Profile '$prof' not found in $PROFILES"
+        validate_json "$pf" ||
+            die "Profile '$prof' is not valid JSON — fix $pf first."
+        have claude || die "claude not found on PATH — install Claude Code first."
+        have python3 || have jq ||
+            die "claude-switch needs python3 or jq to read the profile safely."
+
+        # Drop provider keys inherited from the shell so tokens never mix,
+        # then apply the profile's env to this process only.
+        # settings.json is never read or written.
+        while IFS= read -r k; do
+            case "$k" in ANTHROPIC_*|API_TIMEOUT_MS) unset "$k" ;; esac
+        done < <(env | sed 's/=.*$//')
+        prof_kv=()
+        if have python3; then
+            while IFS= read -r -d '' kv; do prof_kv+=("$kv"); done < <(
+                python3 - "$pf" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    env = json.load(f).get("env") or {}
+for k, v in env.items():
+    sys.stdout.write(f"{k}={v}\0")
+PYEOF
+            )
+        else
+            while IFS= read -r -d '' kv; do prof_kv+=("$kv"); done < <(
+                jq -j '.env // {} | to_entries[] | "\(.key)=\(.value)\u0000"' "$pf"
+            )
+        fi
+        [ ${#prof_kv[@]} -gt 0 ] && export "${prof_kv[@]}"
+        echo "Launching claude with profile '$prof' (this session only — settings.json untouched)." >&2
+        exec claude "$@"
         ;;
     add)
         [ -n "$2" ] || die "Usage: claude-switch add <profile-name>"

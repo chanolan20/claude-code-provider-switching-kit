@@ -68,6 +68,18 @@ claude-switch glm          # Solid quality, minimal cost
 claude-switch openrouter   # Free models, great for learning
 ```
 
+### Or just run one session on a different provider
+
+```bash
+claude-switch run glm                # one session on GLM
+claude-switch run openrouter --resume
+```
+
+`run` applies the profile's env to that claude process only — inherited
+`ANTHROPIC_*`/`API_TIMEOUT_MS` variables are dropped first so tokens never
+mix. **`settings.json` is never read or written**, so your persisted provider
+stays whatever it was. Takes effect immediately, no next-session wait.
+
 ## Provider Comparison
 
 | Provider | Cost | Quality | Extended Thinking | Best For |
@@ -140,6 +152,7 @@ claude-switch list       # Show all available profiles
 claude-switch current    # Show the active profile (keys are masked)
 claude-switch doctor     # Verify setup, detect conflicting config
 claude-switch backups    # List saved settings backups
+claude-switch run glm --resume   # One session on a profile, settings.json untouched
 ```
 
 To restore a backup:
