@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Attach script to release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify script before publishing
+        run: |
+          bash -n claude-switch.sh
+          shellcheck -x claude-switch.sh
+
+      - name: Create release with script
+        uses: softprops/action-gh-release@v2
+        with:
+          files: claude-switch.sh
+          generate_release_notes: true
