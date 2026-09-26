@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        run: shellcheck -x claude-switch.sh
+
+  smoke-test:
+    name: Smoke test (isolated HOME)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install and exercise claude-switch
+        run: |
+          set -euo pipefail
+          export HOME="$(mktemp -d)"
+          mkdir -p "$HOME/.claude/profiles"
+          cp profiles/*.json "$HOME/.claude/profiles/"
+          cp claude-switch.sh "$HOME/.claude/profiles/claude-switch.sh"
+          chmod +x "$HOME/.claude/profiles/claude-switch.sh"
+          CS="$HOME/.claude/profiles/claude-switch.sh"
+
+          # Help and list
+          "$CS" | grep -q "Usage:"
+          "$CS" list | grep -qx anthropic
+          "$CS" list | grep -qx glm
+          "$CS" list | grep -qx openrouter
+
+          # Merge preserves unrelated settings, replaces provider keys, drops stale ones
+          printf '%s' '{"model":"sonnet","permissions":{"allow":["Bash(ls)"]},"env":{"ANTHROPIC_AUTH_TOKEN":"old","ANTHROPIC_API_KEY":"stale","MY_VAR":"keep"}}' > "$HOME/.claude/settings.json"
+          "$CS" glm
+          python3 -c '
+          import json, os
+          s = json.load(open(os.path.expanduser("~/.claude/settings.json")))
+          assert s["model"] == "sonnet"
+          assert s["permissions"]["allow"] == ["Bash(ls)"]
+          env = s["env"]
+          assert env["ANTHROPIC_AUTH_TOKEN"] == "your-glm-api-key"
+          assert "ANTHROPIC_API_KEY" not in env
+          assert env["MY_VAR"] == "keep"
+          '
+
+          # Backup was created
+          ls "$HOME/.claude/backups/claude-switch/" | grep -q '^settings\..*\.json$'
+
+          # current reports the active profile
+          "$CS" current | grep -q "Active profile: glm"
+
+          # Invalid profile JSON is refused
+          printf '%s' '{bad' > "$HOME/.claude/profiles/broken.json"
+          if "$CS" broken >/dev/null 2>&1; then echo "expected refusal"; exit 1; fi
+
+          # Unsafe profile names are refused
+          if "$CS" add '../evil' >/dev/null 2>&1; then echo "expected refusal"; exit 1; fi
+
+          # run subcommand: profile env applied, args passed, settings.json untouched
+          checksum_before="$(sha256sum "$HOME/.claude/settings.json" | cut -d' ' -f1)"
+          mkdir -p "$HOME/bin"
+          printf '%s\n' '#!/bin/bash' 'printf "args:%s\n" "$*"' 'printf "url:%s\n" "$ANTHROPIC_BASE_URL"' > "$HOME/bin/claude"
+          chmod +x "$HOME/bin/claude"
+          export PATH="$HOME/bin:$PATH"
+          out="$("$CS" run glm --resume --model sonnet 2>/dev/null)"
+          echo "$out" | grep -q "args:--resume --model sonnet"
+          echo "$out" | grep -q "url:https://api.z.ai/api/anthropic"
+          checksum_after="$(sha256sum "$HOME/.claude/settings.json" | cut -d' ' -f1)"
+          [ "$checksum_before" = "$checksum_after" ]
+
+          # Completions emit valid scripts
+          bash -n <("$CS" completions bash)
+          "$CS" completions zsh | grep -q compdef
+          if "$CS" completions fish >/dev/null 2>&1; then echo "expected refusal"; exit 1; fi
+
+          echo "SMOKE TEST OK"

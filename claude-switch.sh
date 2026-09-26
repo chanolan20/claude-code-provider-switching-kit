@@ -49,13 +49,21 @@ validate_json() {
 }
 
 # Snapshot the current settings.json before every switch (keeps newest MAX_BACKUPS).
+
+# Timestamped names (YYYYmmdd-HHMMSS) sort chronologically, so reverse
+# lexicographic order is newest-first. No ls parsing needed.
+list_backups() {
+    find "$BACKUPS" -type f -name 'settings.*.json' 2>/dev/null | sort -r
+}
+
 backup_settings() {
     [ -s "$SETTINGS" ] || return 0
     mkdir -p "$BACKUPS"
-    local target="$BACKUPS/settings.$(date +%Y%m%d-%H%M%S).json"
+    local target
+    target="$BACKUPS/settings.$(date +%Y%m%d-%H%M%S).json"
     cp "$SETTINGS" "$target" || die "Could not write backup to $BACKUPS"
     echo "Backed up previous settings -> $target"
-    ls -t "$BACKUPS"/settings.*.json 2>/dev/null |
+    list_backups |
         tail -n +$((MAX_BACKUPS + 1)) |
         while IFS= read -r old; do rm -f "$old"; done
 }
@@ -229,9 +237,9 @@ show_doctor() {
 
     echo ""
     if [ -f "$HOME/.claude.json" ]; then
-        echo "~/.claude.json (Claude Code state file): present"
+        echo "$HOME/.claude.json (Claude Code state file): present"
     else
-        echo "~/.claude.json (Claude Code state file): not found"
+        echo "$HOME/.claude.json (Claude Code state file): not found"
     fi
 }
 
@@ -271,9 +279,9 @@ case $1 in
         show_doctor
         ;;
     backups)
-        if ls "$BACKUPS"/settings.*.json >/dev/null 2>&1; then
+        if [ -n "$(list_backups)" ]; then
             echo "Saved backups (newest first; keeping last $MAX_BACKUPS):"
-            ls -t "$BACKUPS"/settings.*.json
+            list_backups
         else
             echo "No backups yet."
         fi
