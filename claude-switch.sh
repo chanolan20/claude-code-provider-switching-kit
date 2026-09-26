@@ -8,6 +8,7 @@
 #        claude-switch current         Show which profile is active
 #        claude-switch doctor          Verify setup and detect conflicting config
 #        claude-switch backups         List saved settings backups
+#        claude-switch completions <sh>  Print a bash or zsh completion script
 #
 # Everything this tool manages lives under ~/.claude:
 #   ~/.claude/profiles/                  provider profiles (JSON)
@@ -246,6 +247,8 @@ if [ -z "$1" ]; then
     echo "  claude-switch current       Show active profile"
     echo "  claude-switch doctor        Verify setup and detect conflicts"
     echo "  claude-switch backups       List saved settings backups"
+    echo "  claude-switch completions <bash|zsh>"
+    echo "                              Print a shell completion script"
     echo ""
     echo "Available profiles:"
     for f in "$PROFILES"/*.json; do
@@ -316,6 +319,69 @@ PYEOF
         [ ${#prof_kv[@]} -gt 0 ] && export "${prof_kv[@]}"
         echo "Launching claude with profile '$prof' (this session only — settings.json untouched)." >&2
         exec claude "$@"
+        ;;
+    completions)
+        case "${2:-}" in
+            bash)
+                cat << 'BASHCOMP'
+# bash completion for claude-switch
+_claude_switch() {
+    local cur f
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    local profiles=""
+    for f in "$HOME"/.claude/profiles/*.json; do
+        [ -f "$f" ] && profiles="$profiles $(basename "$f" .json)"
+    done
+    local commands="list current doctor backups add run completions"
+
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "$commands$profiles" -- "$cur") )
+    elif [ "$COMP_CWORD" -eq 2 ] && [ "${COMP_WORDS[1]}" = run ]; then
+        COMPREPLY=( $(compgen -W "$profiles" -- "$cur") )
+    fi
+    return 0
+}
+complete -F _claude_switch claude-switch
+BASHCOMP
+                ;;
+            zsh)
+                cat << 'ZSHCOMP'
+#compdef claude-switch
+_claude_switch() {
+    local -a profiles actions
+    local f
+    for f in "$HOME"/.claude/profiles/*.json(N); do
+        profiles+=("${f:t:r}")
+    done
+    actions=(
+        'list:List available profiles'
+        'current:Show the active profile'
+        'doctor:Verify setup and detect conflicts'
+        'backups:List saved settings backups'
+        'add:Create a new profile'
+        'run:Launch claude with a profile for one session'
+        'completions:Print a shell completion script'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t actions 'action' actions
+        _describe -t profiles 'profile' profiles
+    elif (( CURRENT == 3 )); then
+        case "$words[2]" in
+            run) _describe -t profiles 'profile' profiles ;;
+            completions) _values 'shell' bash zsh ;;
+            add) _message 'new profile name' ;;
+        esac
+    fi
+}
+compdef _claude_switch claude-switch
+ZSHCOMP
+                ;;
+            *)
+                echo "Usage: claude-switch completions <bash|zsh>" >&2
+                exit 1
+                ;;
+        esac
         ;;
     add)
         [ -n "$2" ] || die "Usage: claude-switch add <profile-name>"

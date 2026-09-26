@@ -155,6 +155,24 @@ claude-switch backups    # List saved settings backups
 claude-switch run glm --resume   # One session on a profile, settings.json untouched
 ```
 
+### Shell completion
+
+The script can emit its own completion script, so there is no second file to
+install or keep in sync:
+
+```bash
+# bash
+source <(claude-switch completions bash)
+
+# zsh
+source <(claude-switch completions zsh)
+```
+
+To make it permanent, add the matching line to your `~/.zshrc` (or
+`~/.bashrc`). Completions suggest subcommands first, then profile names for
+the positional `<profile>` and for `run` — always read live from
+`~/.claude/profiles/`, so new profiles tab-complete immediately.
+
 To restore a backup:
 
 ```bash
