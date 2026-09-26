@@ -202,13 +202,14 @@ show_doctor() {
     echo ""
 
     echo "Shell rc exports that could override profiles:"
+    echo "  (top-level only — indented, function-scoped assignments are ignored)"
     local conflicts=0
     for rc in "$HOME/.zshenv" "$HOME/.zprofile" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.bashrc"; do
         [ -f "$rc" ] || continue
         while IFS= read -r hit; do
             echo "  $rc:$hit"
             conflicts=$((conflicts + 1))
-        done < <(grep -nE '^[[:space:]]*(export[[:space:]]+)?(ANTHROPIC_|CLAUDE_CODE_)' "$rc" 2>/dev/null)
+        done < <(grep -nE '^(export[[:space:]]+)?(ANTHROPIC_|CLAUDE_CODE_)[A-Z_]+=' "$rc" 2>/dev/null)
     done
     [ "$conflicts" -eq 0 ] && echo "  none found — profile switching takes full effect"
 
