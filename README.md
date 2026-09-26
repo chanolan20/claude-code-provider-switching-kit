@@ -14,6 +14,14 @@ profiles/
 claude-switch.sh     # The switching script
 ```
 
+After installing, everything lives under `~/.claude` where Claude Code reads it:
+
+```
+~/.claude/profiles/                  # your provider profiles
+~/.claude/settings.json              # Claude Code settings (env is merged, never clobbered)
+~/.claude/backups/claude-switch/     # timestamped settings backups (last 10 kept)
+```
+
 ## Quick Setup (2 minutes)
 
 ### 1. Create the profiles folder
@@ -68,6 +76,36 @@ claude-switch openrouter   # Free models, great for learning
 | GLM | ~$5-15/mo | Good (close to Sonnet) | No | Daily work, drafting, research |
 | OpenRouter | Free tier available | Variable | No | Learning, testing, simple tasks |
 
+## How switching works
+
+- **Merge, not overwrite.** Switching replaces only the provider-owned env keys
+  (`ANTHROPIC_*`, `API_TIMEOUT_MS`) inside `settings.json`. Your
+  `permissions`, `hooks`, `model`, and everything else are preserved, and stale
+  keys from the previous provider are removed so tokens never mix.
+- **Backups first.** Every switch snapshots the current `settings.json` to
+  `~/.claude/backups/claude-switch/` before touching it. The last 10 are kept.
+- **Validation.** Profiles and the existing `settings.json` are checked for
+  valid JSON before anything is written; writes are atomic.
+- **Takes effect next session.** Claude Code reads `settings.json` at startup,
+  so run `claude-switch <profile>` and the next `claude` session uses it.
+- Requires `python3` or `jq` on your PATH (checked automatically).
+
+Profile names may contain letters, digits, `-`, and `_` only — no slashes,
+dots, or spaces.
+
+## Checking your setup
+
+```bash
+claude-switch doctor
+```
+
+Verifies that everything is under `~/.claude`, checks `settings.json` health,
+shows the active profile, and warns about config that could override your
+profile — e.g. `ANTHROPIC_*` / `CLAUDE_CODE_*` exports in your shell rc files
+(`~/.zshrc`, `~/.bashrc`, …) or provider keys in project-level
+`.claude/settings.json` files. If `doctor` flags shell exports, remove them so
+profiles take full effect.
+
 ## What stays the same across providers
 
 - All file operations (read, edit, create, search)
@@ -99,7 +137,15 @@ Any JSON file in `~/.claude/profiles/` becomes a valid provider. No code changes
 
 ```bash
 claude-switch list       # Show all available profiles
-claude-switch current    # Show what's currently active
+claude-switch current    # Show the active profile (keys are masked)
+claude-switch doctor     # Verify setup, detect conflicting config
+claude-switch backups    # List saved settings backups
+```
+
+To restore a backup:
+
+```bash
+cp ~/.claude/backups/claude-switch/settings.<timestamp>.json ~/.claude/settings.json
 ```
 
 ## OpenRouter: Free models that work with Claude Code

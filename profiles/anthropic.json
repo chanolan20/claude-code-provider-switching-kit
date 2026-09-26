@@ -1,7 +1,10 @@
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
-    "ANTHROPIC_API_KEY": "your-anthropic-api-key",
+    "ANTHROPIC_AUTH_TOKEN": "your-anthropic-api-key",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "opus",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "haiku",
     "API_TIMEOUT_MS": "300000"
   }
 }
